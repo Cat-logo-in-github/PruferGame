@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prüfer Dungeon Crawler</title>
+    <style>
+        :root {
+            --color-background: #1a1a2e;
+            --color-surface: #16213e;
+            --color-text: #e4e4e4;
+            --color-primary: #0f3460;
+            --color-accent: #e94560;
+            --color-health: #2ecc71;
+            --color-mana: #3498db;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--color-background);
+            color: var(--color-text);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #gameContainer {
+            display: flex;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        #mainView {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #gameCanvas {
+            background: var(--color-surface);
+            border: 3px solid var(--color-primary);
+            border-radius: 8px;
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        #sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .panel {
+            background: var(--color-surface);
+            border: 2px solid var(--color-primary);
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .panel h3 {
+            color: var(--color-accent);
+            margin-bottom: 12px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-bar {
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .bar {
+            height: 20px;
+            background: #2a2a3e;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--color-primary);
+        }
+
+        .bar-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .health-bar { background: var(--color-health); }
+        .attack-bar { background: var(--color-accent); }
+
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .inventory-slot {
+            aspect-ratio: 1;
+            background: #2a2a3e;
+            border: 2px solid var(--color-primary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .inventory-slot:hover {
+            border-color: var(--color-accent);
+            transform: scale(1.05);
+        }
+
+        .inventory-slot.equipped {
+            border-color: var(--color-accent);
+            box-shadow: 0 0 10px var(--color-accent);
+        }
+
+        .slot-count {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 1px 4px;
+            border-radius: 2px;
+        }
+
+        .controls {
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .controls kbd {
+            background: #2a2a3e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid var(--color-primary);
+            font-family: monospace;
+            margin: 0 2px;
+        }
+
+        .log {
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .log-entry.combat { color: var(--color-accent); }
+        .log-entry.loot { color: #f39c12; }
+        .log-entry.info { color: var(--color-mana); }
+
+        #metrics {
+            font-family: monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+        }
+
+        .metric-label { color: #888; }
+        .metric-value { color: var(--color-accent); }
+
+        .minimap {
+            width: 100%;
+            height: 180px;
+            background: #0a0a14;
+            border: 1px solid var(--color-primary);
+            border-radius: 4px;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        #minimapCanvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        .room-type {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(233, 69, 96, 0.2);
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .btn {
+            background: var(--color-primary);
+            color: var(--color-text);
+            border: 2px solid var(--color-accent);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            background: var(--color-accent);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="mainView">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+        
+        <div id="sidebar">
+            <div class="panel">
+                <h3>⚔️ Player Stats</h3>
+                <div class="stat-bar">
+                    <div class="stat-label">
+                        <span>Health</span>
+                        <span id="healthText">100/100</span>
+                    </div>
+                    <div class="bar">
+                        <div class="bar-fill health-bar" id="healthBar" style="width: 100%"></div>
+                    </div>
+                </div>
+                <div class="stat-bar">
+                    <div class="stat-label">
+                        <span>Attack</span>
+                        <span id="attackText">10</span>
+                    </div>
+                    <div class="bar">
+                        <div class="bar-fill attack-bar" style="width: 50%"></div>
+                    </div>
+                </div>
+                <div class="stat-label">
+                    <span>💰 Coins:</span>
+                    <span id="coinText">0</span>
+                </div>
+                <div class="stat-label">
+                    <span>📍 Room:</span>
+                    <span id="roomText">1</span>
+                </div>
+                <div class="room-type" id="biomeText">entrance</div>
+            </div>
+
+            <div class="panel">
+                <h3>🎒 Inventory</h3>
+                <div class="inventory-grid" id="inventoryGrid"></div>
+            </div>
+
+            <div class="panel">
+                <h3>🗺️ Minimap</h3>
+                <div class="minimap">
+                    <canvas id="minimapCanvas" width="280" height="160"></canvas>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>📊 Algorithm Metrics</h3>
+                <div id="metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Dungeon Size:</span>
+                        <span class="metric-value" id="metricSize">25 rooms</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Prüfer Length:</span>
+                        <span class="metric-value" id="metricPrufer">23</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Max Depth:</span>
+                        <span class="metric-value" id="metricDepth">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Diameter:</span>
+                        <span class="metric-value" id="metricDiameter">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Neighbor Query:</span>
+                        <span class="metric-value">O(n)</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Space:</span>
+                        <span class="metric-value">O(n) Prüfer only</span>
+                    </div>
+                </div>
+                <button class="btn" onclick="regenerateDungeon()" style="margin-top: 10px; width: 100%">
+                    🔄 New Dungeon
+                </button>
+            </div>
+
+            <div class="panel">
+                <h3>📜 Combat Log</h3>
+                <div class="log" id="combatLog"></div>
+            </div>
+
+            <div class="panel">
+                <h3>🎮 Controls</h3>
+                <div class="controls">
+                    <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Move<br>
+                    <kbd>Space</kbd> Attack<br>
+                    <kbd>E</kbd> Use potion<br>
+                    <kbd>1-9</kbd> Equip weapon<br>
+                    <kbd>M</kbd> Toggle minimap
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /************************************************************
+         * PRÜFER DUNGEON CRAWLER
+         * ----------------------------------------------------------
+         * Efficient Prüfer-based procedural dungeon generation
+         * with Terraria-style gameplay and Pixel Dungeon mechanics
+         ************************************************************/
+
+        // ===============================================
+        // GAME STATE
+        // ===============================================
+        const TILE_SIZE = 32;
+        const ROOM_WIDTH = 25;
+        const ROOM_HEIGHT = 19;
+        
+        let canvas, ctx, minimapCanvas, minimapCtx;
+        let n = 25; // number of rooms
+        let prufer = [];
+        let worldSeed = Date.now();
+        let rngState;
+        
+        // Graph metrics
+        let depthArr = {};
+        let parentArr = {};
+        let subtreeSize = {};
+        let diameterValue = 0;
+        let diameterEnds = [];
+        let biome = {};
+        let gridPos = {};
+        
+        // Player state
+        let player = {
+            x: 12,
+            y: 9,
+            health: 100,
+            maxHealth: 100,
+            attack: 10,
+            coins: 0,
+            inventory: [],
+            equippedWeapon: null,
+            room: 1
+        };
+        
+        // Current room state
+        let currentRoom = {
+            id: 1,
+            enemies: [],
+            items: [],
+            cleared: false,
+            visited: new Set([1])
+        };
+        
+        // Game state
+        let gameLog = [];
+        let showMinimap = true;
+        let keys = {};
+        let lastMoveTime = 0;
+        let MOVE_COOLDOWN = 150;
+
+        // ===============================================
+        // DETERMINISTIC RNG
+        // ===============================================
+        function mulberry32(a) {
+            return function() {
+                a |= 0; a = a + 0x6D2B79F5 | 0;
+                let t = Math.imul(a ^ a >>> 15, 1 | a);
+                t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        function setSeed(seed) {
+            worldSeed = seed;
+            rngState = mulberry32(seed);
+        }
+
+        function seededRandom() {
+            return rngState();
+        }
+
+        function seededRandomInt(a, b) {
+            return Math.floor(seededRandom() * (b - a + 1)) + a;
+        }
+
+        // ===============================================
+        // PRÜFER CODE LOGIC (O(n) time, O(n) space)
+        // ===============================================
+        function seededPrufer(n) {
+            let seq = [];
+            for (let i = 0; i < n - 2; i++) {
+                seq.push(seededRandomInt(1, n));
+            }
+            return seq;
+        }
+
+        // O(n) - Memoryless neighbor reconstruction
+        function getNeighbors(prufer, n, target) {
+            let degree = new Array(n + 1).fill(1);
+            for (let v of prufer) degree[v]++;
+
+            let leaves = [];
+            for (let i = 1; i <= n; i++) if (degree[i] === 1) leaves.push(i);
+            leaves.sort((a, b) => a - b);
+
+            let neighbors = [];
+
+            for (let p of prufer) {
+                let leaf = leaves.shift();
+
+                if (leaf === target) neighbors.push(p);
+                if (p === target) neighbors.push(leaf);
+
+                degree[leaf]--;
+                degree[p]--;
+
+                if (degree[p] === 1) {
+                    let pos = 0;
+                    while (pos < leaves.length && leaves[pos] < p) pos++;
+                    leaves.splice(pos, 0, p);
+                }
+            }
+
+            let a = leaves[0], b = leaves[1];
+            if (a === target) neighbors.push(b);
+            if (b === target) neighbors.push(a);
+
+            return neighbors;
+        }
+
+        // O(n²) - Build full edge list for visualization
+        function buildTreeEdges(prufer, n) {
+            let degree = new Array(n + 1).fill(1);
+            for (let v of prufer) degree[v]++;
+
+            let leaves = [];
+            for (let i = 1; i <= n; i++) if (degree[i] === 1) leaves.push(i);
+            leaves.sort((a, b) => a - b);
+
+            let edges = [];
+
+            for (let p of prufer) {
+                let leaf = leaves.shift();
+                edges.push([leaf, p]);
+
+                degree[leaf]--;
+                degree[p]--;
+
+                if (degree[p] === 1) {
+                    let pos = 0;
+                    while (pos < leaves.length && leaves[pos] < p) pos++;
+                    leaves.splice(pos, 0, p);
+                }
+            }
+
+            edges.push(leaves);
+            return edges;
+        }
+
+        // ===============================================
+        // GRAPH METRICS (for biome assignment)
+        // ===============================================
+        function computeDepths() {
+            let Q = [1];
+            depthArr = {};
+            parentArr = {};
+            depthArr[1] = 0;
+            parentArr[1] = null;
+
+            while (Q.length > 0) {
+                let v = Q.shift();
+                let neighbors = getNeighbors(prufer, n, v);
+
+                for (let u of neighbors) {
+                    if (!(u in depthArr)) {
+                        depthArr[u] = depthArr[v] + 1;
+                        parentArr[u] = v;
+                        Q.push(u);
+                    }
+                }
+            }
+        }
+
+        function computeSubtreeSizes() {
+            subtreeSize = {};
+            for (let i = 1; i <= n; i++) subtreeSize[i] = 1;
+
+            let order = Object.keys(depthArr)
+                .map(x => parseInt(x))
+                .sort((a, b) => depthArr[b] - depthArr[a]);
+
+            for (let v of order) {
+                let p = parentArr[v];
+                if (p !== null) subtreeSize[p] += subtreeSize[v];
+            }
+        }
+
+        function computeDiameter() {
+            function bfsFarthest(start) {
+                let Q = [start];
+                let dist = {};
+                dist[start] = 0;
+                let far = start;
+
+                while (Q.length > 0) {
+                    let v = Q.shift();
+                    if (dist[v] > dist[far]) far = v;
+
+                    for (let u of getNeighbors(prufer, n, v)) {
+                        if (!(u in dist)) {
+                            dist[u] = dist[v] + 1;
+                            Q.push(u);
+                        }
+                    }
+                }
+                return { farthest: far, distances: dist };
+            }
+
+            let res1 = bfsFarthest(1);
+            let u = res1.farthest;
+            let res2 = bfsFarthest(u);
+            let v = res2.farthest;
+
+            diameterValue = res2.distances[v];
+            diameterEnds = [u, v];
+        }
+
+        // BFS-based grid layout for minimap
+        function computeGridLayout() {
+            let Q = [1];
+            let visited = new Set([1]);
+            gridPos = {};
+            gridPos[1] = { gx: 0, gy: 0 };
+            
+            while (Q.length > 0) {
+                let v = Q.shift();
+                let neighbors = getNeighbors(prufer, n, v);
+                let vPos = gridPos[v];
+                
+                // Assign positions to unvisited neighbors
+                let directions = [
+                    { dx: 0, dy: -1 },  // North
+                    { dx: 1, dy: 0 },   // East
+                    { dx: 0, dy: 1 },   // South
+                    { dx: -1, dy: 0 }   // West
+                ];
+                
+                let dirIndex = 0;
+                for (let u of neighbors) {
+                    if (!visited.has(u)) {
+                        visited.add(u);
+                        
+                        // Try to place in a free direction
+                        let placed = false;
+                        for (let attempt = 0; attempt < 4 && !placed; attempt++) {
+                            let dir = directions[(dirIndex + attempt) % 4];
+                            let newPos = { gx: vPos.gx + dir.dx, gy: vPos.gy + dir.dy };
+                            
+                            // Check if position is free
+                            let isFree = true;
+                            for (let existingRoom in gridPos) {
+                                let ePos = gridPos[existingRoom];
+                                if (ePos.gx === newPos.gx && ePos.gy === newPos.gy) {
+                                    isFree = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (isFree) {
+                                gridPos[u] = newPos;
+                                placed = true;
+                            }
+                        }
+                        
+                        // Fallback: place anywhere
+                        if (!placed) {
+                            gridPos[u] = { gx: vPos.gx + 1, gy: vPos.gy + 1 };
+                        }
+                        
+                        Q.push(u);
+                        dirIndex++;
+                    }
+                }
+            }
+        }
+        
+        function assignBiomes() {
+            biome = {};
+            let degree = new Array(n + 1).fill(1);
+            for (let v of prufer) degree[v]++;
+
+            let maxDepth = Math.max(...Object.values(depthArr));
+
+            for (let v = 1; v <= n; v++) {
+                let d = depthArr[v];
+                let deg = degree[v];
+                let sub = subtreeSize[v];
+
+                if (d === 0) {
+                    biome[v] = "entrance";
+                } else if (v === diameterEnds[0] || v === diameterEnds[1]) {
+                    biome[v] = "boss_room";
+                } else if (deg >= 4) {
+                    biome[v] = "ancient_city";
+                } else if (sub >= n * 0.15) {
+                    biome[v] = "cavern_forest";
+                } else {
+                    let ratio = d / maxDepth;
+                    if (ratio < 0.33) biome[v] = "crypt";
+                    else if (ratio < 0.66) biome[v] = "fungal_cave";
+                    else biome[v] = "lava_depths";
+                }
+            }
+        }
+
+        // ===============================================
+        // ROOM GENERATION
+        // ===============================================
+        // Cache for room data to keep items/enemies fixed
+        let roomCache = {};
+        
+        function generateRoom(roomId) {
+            // Return cached room if already generated
+            if (roomCache[roomId]) {
+                return roomCache[roomId];
+            }
+            
+            let localSeed = worldSeed + roomId * 99991;
+            let localRNG = mulberry32(localSeed);
+            
+            let roomData = {
+                id: roomId,
+                tiles: [],
+                enemies: [],
+                items: [],
+                cleared: currentRoom.visited.has(roomId),
+                neighbors: getNeighbors(prufer, n, roomId),
+                biome: biome[roomId] || "crypt"
+            };
+
+            // Generate tile map
+            for (let y = 0; y < ROOM_HEIGHT; y++) {
+                roomData.tiles[y] = [];
+                for (let x = 0; x < ROOM_WIDTH; x++) {
+                    let isWall = (y === 0 || y === ROOM_HEIGHT - 1 || 
+                                 x === 0 || x === ROOM_WIDTH - 1);
+                    roomData.tiles[y][x] = isWall ? 'wall' : 'floor';
+                }
+            }
+
+            // Add doorways based on grid layout position
+            let neighbors = roomData.neighbors;
+            let pos = gridPos[roomId];
+            
+            for (let neighbor of neighbors) {
+                let nPos = gridPos[neighbor];
+                
+                // North door (neighbor above)
+                if (nPos.gy < pos.gy) {
+                    roomData.tiles[0][Math.floor(ROOM_WIDTH/2)] = 'door';
+                    roomData.tiles[0][Math.floor(ROOM_WIDTH/2) + 1] = 'door';
+                }
+                // South door (neighbor below)
+                if (nPos.gy > pos.gy) {
+                    roomData.tiles[ROOM_HEIGHT-1][Math.floor(ROOM_WIDTH/2)] = 'door';
+                    roomData.tiles[ROOM_HEIGHT-1][Math.floor(ROOM_WIDTH/2) + 1] = 'door';
+                }
+                // West door (neighbor left)
+                if (nPos.gx < pos.gx) {
+                    roomData.tiles[Math.floor(ROOM_HEIGHT/2)][0] = 'door';
+                    roomData.tiles[Math.floor(ROOM_HEIGHT/2) + 1][0] = 'door';
+                }
+                // East door (neighbor right)
+                if (nPos.gx > pos.gx) {
+                    roomData.tiles[Math.floor(ROOM_HEIGHT/2)][ROOM_WIDTH-1] = 'door';
+                    roomData.tiles[Math.floor(ROOM_HEIGHT/2) + 1][ROOM_WIDTH-1] = 'door';
+                }
+            }
+
+            // Generate enemies (not in entrance or cleared rooms)
+            if (roomData.biome !== "entrance" && !roomCache[roomId]) {
+                let enemyCount = Math.floor(localRNG() * 3) + 1;
+                for (let i = 0; i < enemyCount; i++) {
+                    let ex = seededRandomInt(2, ROOM_WIDTH - 3);
+                    let ey = seededRandomInt(2, ROOM_HEIGHT - 3);
+                    
+                    let enemyTypes = ['👾', '👻', '🦇', '🐍', '🕷️'];
+                    let type = enemyTypes[Math.floor(localRNG() * enemyTypes.length)];
+                    
+                    roomData.enemies.push({
+                        x: ex,
+                        y: ey,
+                        type: type,
+                        health: 20 + seededRandomInt(0, 30),
+                        attack: 5 + seededRandomInt(0, 10),
+                        moveTimer: 0
+                    });
+                }
+            }
+
+            // Generate items
+            let itemCount = Math.floor(localRNG() * 4) + 2;
+            for (let i = 0; i < itemCount; i++) {
+                let ix = Math.floor(localRNG() * (ROOM_WIDTH - 4)) + 2;
+                let iy = Math.floor(localRNG() * (ROOM_HEIGHT - 4)) + 2;
+                
+                let rand = localRNG();
+                let item;
+                if (rand < 0.5) {
+                    item = { type: 'coin', emoji: '💰', value: Math.floor(localRNG() * 16) + 5 };
+                } else if (rand < 0.75) {
+                    item = { type: 'health', emoji: '❤️', value: 25 };
+                } else {
+                    let weapons = ['🗡️', '⚔️', '🔪', '🏹', '🔨'];
+                    item = { 
+                        type: 'weapon', 
+                        emoji: weapons[Math.floor(localRNG() * weapons.length)],
+                        attack: 10 + Math.floor(localRNG() * 21)
+                    };
+                }
+                
+                roomData.items.push({ x: ix, y: iy, ...item });
+            }
+
+            // Cache the room
+            roomCache[roomId] = roomData;
+            
+            return roomData;
+        }
+
+        // ===============================================
+        // RENDERING
+        // ===============================================
+        function getBiomeColors(biomeName) {
+            const colors = {
+                entrance: { wall: '#8B7355', floor: '#D2B48C', accent: '#F4A460' },
+                crypt: { wall: '#4A4A5A', floor: '#2C2C3C', accent: '#7A7A8A' },
+                fungal_cave: { wall: '#2D5016', floor: '#1A3010', accent: '#4A8028' },
+                lava_depths: { wall: '#8B0000', floor: '#4A0000', accent: '#FF4500' },
+                boss_room: { wall: '#2C003E', floor: '#1A0026', accent: '#8B00FF' },
+                ancient_city: { wall: '#B8860B', floor: '#8B6914', accent: '#DAA520' },
+                cavern_forest: { wall: '#2F4F2F', floor: '#1C3020', accent: '#3CB371' }
+            };
+            return colors[biomeName] || colors.crypt;
+        }
+
+        function drawRoom() {
+            let room = generateRoom(currentRoom.id);
+            let colors = getBiomeColors(room.biome);
+
+            // Draw tiles
+            for (let y = 0; y < ROOM_HEIGHT; y++) {
+                for (let x = 0; x < ROOM_WIDTH; x++) {
+                    let tile = room.tiles[y][x];
+                    
+                    if (tile === 'wall') {
+                        ctx.fillStyle = colors.wall;
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = colors.accent;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else if (tile === 'door') {
+                        ctx.fillStyle = '#000000';
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else {
+                        ctx.fillStyle = colors.floor;
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        
+                        // Floor pattern
+                        if ((x + y) % 3 === 0) {
+                            ctx.fillStyle = colors.accent + '20';
+                            ctx.fillRect(x * TILE_SIZE + 8, y * TILE_SIZE + 8, 16, 16);
+                        }
+                    }
+                }
+            }
+
+            // Draw items
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let item of room.items) {
+                ctx.fillText(item.emoji, 
+                    item.x * TILE_SIZE + TILE_SIZE/2, 
+                    item.y * TILE_SIZE + TILE_SIZE/2);
+            }
+
+            // Draw enemies
+            for (let enemy of room.enemies) {
+                ctx.fillText(enemy.type, 
+                    enemy.x * TILE_SIZE + TILE_SIZE/2, 
+                    enemy.y * TILE_SIZE + TILE_SIZE/2);
+                
+                // Health bar
+                let barWidth = 20;
+                let healthPercent = enemy.health / (20 + 30);
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(enemy.x * TILE_SIZE + 6, enemy.y * TILE_SIZE - 5, 
+                    barWidth * healthPercent, 3);
+            }
+
+            // Draw player
+            ctx.fillText('🧙', 
+                player.x * TILE_SIZE + TILE_SIZE/2, 
+                player.y * TILE_SIZE + TILE_SIZE/2);
+
+            // Store current room enemies and items for collision
+            currentRoom.enemies = room.enemies;
+            currentRoom.items = room.items;
+        }
+
+        function drawMinimap() {
+            minimapCtx.fillStyle = '#0a0a14';
+            minimapCtx.fillRect(0, 0, 280, 160);
+            
+            if (!showMinimap) return;
+
+            // Find bounds of grid layout
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            
+            for (let room in gridPos) {
+                minX = Math.min(minX, gridPos[room].gx);
+                maxX = Math.max(maxX, gridPos[room].gx);
+                minY = Math.min(minY, gridPos[room].gy);
+                maxY = Math.max(maxY, gridPos[room].gy);
+            }
+            
+            let gridWidth = maxX - minX + 1;
+            let gridHeight = maxY - minY + 1;
+            
+            // Scale to fit minimap
+            let cellSize = Math.min(
+                (280 - 20) / gridWidth,
+                (160 - 20) / gridHeight
+            );
+            cellSize = Math.min(cellSize, 20); // Cap size
+            
+            let offsetX = (280 - gridWidth * cellSize) / 2;
+            let offsetY = (160 - gridHeight * cellSize) / 2;
+            
+            // Draw connections
+            let edges = buildTreeEdges(prufer, n);
+            minimapCtx.strokeStyle = '#444';
+            minimapCtx.lineWidth = 2;
+            
+            for (let [a, b] of edges) {
+                let posA = gridPos[a];
+                let posB = gridPos[b];
+                
+                let x1 = offsetX + (posA.gx - minX) * cellSize + cellSize / 2;
+                let y1 = offsetY + (posA.gy - minY) * cellSize + cellSize / 2;
+                let x2 = offsetX + (posB.gx - minX) * cellSize + cellSize / 2;
+                let y2 = offsetY + (posB.gy - minY) * cellSize + cellSize / 2;
+                
+                minimapCtx.beginPath();
+                minimapCtx.moveTo(x1, y1);
+                minimapCtx.lineTo(x2, y2);
+                minimapCtx.stroke();
+            }
+
+            // Draw rooms
+            for (let i = 1; i <= n; i++) {
+                let pos = gridPos[i];
+                let x = offsetX + (pos.gx - minX) * cellSize;
+                let y = offsetY + (pos.gy - minY) * cellSize;
+                
+                if (i === currentRoom.id) {
+                    minimapCtx.fillStyle = '#e94560';
+                    minimapCtx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                } else if (currentRoom.visited.has(i)) {
+                    minimapCtx.fillStyle = '#0f3460';
+                    minimapCtx.fillRect(x + 3, y + 3, cellSize - 6, cellSize - 6);
+                } else {
+                    minimapCtx.fillStyle = '#2a2a3e';
+                    minimapCtx.fillRect(x + 4, y + 4, cellSize - 8, cellSize - 8);
+                }
+            }
+        }
+
+        function updateUI() {
+            // Health bar
+            let healthPercent = (player.health / player.maxHealth) * 100;
+            document.getElementById('healthBar').style.width = healthPercent + '%';
+            document.getElementById('healthText').textContent = 
+                `${player.health}/${player.maxHealth}`;
+
+            // Stats
+            document.getElementById('attackText').textContent = player.attack;
+            document.getElementById('coinText').textContent = player.coins;
+            document.getElementById('roomText').textContent = currentRoom.id;
+            document.getElementById('biomeText').textContent = biome[currentRoom.id] || 'unknown';
+
+            // Inventory
+            let invGrid = document.getElementById('inventoryGrid');
+            invGrid.innerHTML = '';
+            
+            for (let i = 0; i < 8; i++) {
+                let slot = document.createElement('div');
+                slot.className = 'inventory-slot';
+                
+                if (i < player.inventory.length) {
+                    let item = player.inventory[i];
+                    slot.textContent = item.emoji;
+                    
+                    if (item === player.equippedWeapon) {
+                        slot.classList.add('equipped');
+                    }
+                    
+                    slot.onclick = () => equipWeapon(i);
+                }
+                
+                invGrid.appendChild(slot);
+            }
+
+            // Metrics
+            let maxDepth = Math.max(...Object.values(depthArr));
+            document.getElementById('metricSize').textContent = `${n} rooms`;
+            document.getElementById('metricPrufer').textContent = prufer.length;
+            document.getElementById('metricDepth').textContent = maxDepth;
+            document.getElementById('metricDiameter').textContent = diameterValue;
+
+            // Combat log
+            let logDiv = document.getElementById('combatLog');
+            logDiv.innerHTML = gameLog.slice(-10).map(entry => 
+                `<div class="log-entry ${entry.type}">${entry.text}</div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // ===============================================
+        // GAME LOGIC
+        // ===============================================
+        function canMoveTo(x, y) {
+            if (x < 0 || x >= ROOM_WIDTH || y < 0 || y >= ROOM_HEIGHT) return false;
+            
+            let room = generateRoom(currentRoom.id);
+            let tile = room.tiles[y][x];
+            
+            return tile === 'floor' || tile === 'door';
+        }
+
+        function checkRoomTransition(x, y) {
+            let neighbors = getNeighbors(prufer, n, currentRoom.id);
+            let pos = gridPos[currentRoom.id];
+            
+            // Check if at edge and can transition to correct neighbor
+            if (y === 0) {
+                // North - find neighbor above
+                for (let neighbor of neighbors) {
+                    let nPos = gridPos[neighbor];
+                    if (nPos.gy < pos.gy) {
+                        currentRoom.id = neighbor;
+                        currentRoom.visited.add(neighbor);
+                        player.y = ROOM_HEIGHT - 2;
+                        addLog(`Entered Room ${neighbor} - ${biome[neighbor]}`, 'info');
+                        return true;
+                    }
+                }
+            } else if (y === ROOM_HEIGHT - 1) {
+                // South - find neighbor below
+                for (let neighbor of neighbors) {
+                    let nPos = gridPos[neighbor];
+                    if (nPos.gy > pos.gy) {
+                        currentRoom.id = neighbor;
+                        currentRoom.visited.add(neighbor);
+                        player.y = 1;
+                        addLog(`Entered Room ${neighbor} - ${biome[neighbor]}`, 'info');
+                        return true;
+                    }
+                }
+            } else if (x === 0) {
+                // West - find neighbor left
+                for (let neighbor of neighbors) {
+                    let nPos = gridPos[neighbor];
+                    if (nPos.gx < pos.gx) {
+                        currentRoom.id = neighbor;
+                        currentRoom.visited.add(neighbor);
+                        player.x = ROOM_WIDTH - 2;
+                        addLog(`Entered Room ${neighbor} - ${biome[neighbor]}`, 'info');
+                        return true;
+                    }
+                }
+            } else if (x === ROOM_WIDTH - 1) {
+                // East - find neighbor right
+                for (let neighbor of neighbors) {
+                    let nPos = gridPos[neighbor];
+                    if (nPos.gx > pos.gx) {
+                        currentRoom.id = neighbor;
+                        currentRoom.visited.add(neighbor);
+                        player.x = 1;
+                        addLog(`Entered Room ${neighbor} - ${biome[neighbor]}`, 'info');
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        function movePlayer(dx, dy) {
+            let newX = player.x + dx;
+            let newY = player.y + dy;
+            
+            if (canMoveTo(newX, newY)) {
+                player.x = newX;
+                player.y = newY;
+                
+                // Check for items
+                for (let i = currentRoom.items.length - 1; i >= 0; i--) {
+                    let item = currentRoom.items[i];
+                    if (item.x === player.x && item.y === player.y) {
+                        collectItem(item);
+                        currentRoom.items.splice(i, 1);
+                    }
+                }
+                
+                // Check room transition
+                checkRoomTransition(player.x, player.y);
+            }
+        }
+
+        function collectItem(item) {
+            if (item.type === 'coin') {
+                player.coins += item.value;
+                addLog(`+${item.value} coins!`, 'loot');
+            } else if (item.type === 'health') {
+                player.health = Math.min(player.maxHealth, player.health + item.value);
+                addLog(`+${item.value} health!`, 'loot');
+            } else if (item.type === 'weapon') {
+                player.inventory.push(item);
+                addLog(`Found ${item.emoji} (Attack +${item.attack})!`, 'loot');
+            }
+        }
+
+        function equipWeapon(index) {
+            if (index < player.inventory.length) {
+                let weapon = player.inventory[index];
+                if (weapon.type === 'weapon') {
+                    player.equippedWeapon = weapon;
+                    player.attack = 10 + weapon.attack;
+                    addLog(`Equipped ${weapon.emoji}`, 'info');
+                }
+            }
+        }
+
+        function attackEnemies() {
+            let attackRange = 1.5;
+            let hitAny = false;
+            
+            for (let i = currentRoom.enemies.length - 1; i >= 0; i--) {
+                let enemy = currentRoom.enemies[i];
+                let dist = Math.sqrt(
+                    Math.pow(enemy.x - player.x, 2) + 
+                    Math.pow(enemy.y - player.y, 2)
+                );
+                
+                if (dist <= attackRange) {
+                    enemy.health -= player.attack;
+                    hitAny = true;
+                    
+                    if (enemy.health <= 0) {
+                        currentRoom.enemies.splice(i, 1);
+                        player.coins += seededRandomInt(10, 25);
+                        addLog(`Defeated ${enemy.type}! +15 coins`, 'combat');
+                    } else {
+                        addLog(`Hit ${enemy.type} for ${player.attack} damage!`, 'combat');
+                    }
+                }
+            }
+            
+            if (!hitAny) {
+                addLog('Swing and miss!', 'combat');
+            }
+        }
+
+        function updateEnemies() {
+            for (let enemy of currentRoom.enemies) {
+                enemy.moveTimer++;
+                
+                if (enemy.moveTimer > 30) {
+                    enemy.moveTimer = 0;
+                    
+                    // Simple AI: move towards player
+                    let dx = player.x - enemy.x;
+                    let dy = player.y - enemy.y;
+                    
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        enemy.x += Math.sign(dx);
+                    } else {
+                        enemy.y += Math.sign(dy);
+                    }
+                    
+                    // Attack if adjacent
+                    let dist = Math.sqrt(
+                        Math.pow(enemy.x - player.x, 2) + 
+                        Math.pow(enemy.y - player.y, 2)
+                    );
+                    
+                    if (dist <= 1.5) {
+                        player.health -= enemy.attack;
+                        addLog(`${enemy.type} hit you for ${enemy.attack} damage!`, 'combat');
+                        
+                        if (player.health <= 0) {
+                            addLog('💀 Game Over!', 'combat');
+                            setTimeout(() => {
+                                alert('You died! Starting new dungeon...');
+                                regenerateDungeon();
+                            }, 100);
+                        }
+                    }
+                }
+            }
+        }
+
+        function addLog(text, type = 'info') {
+            gameLog.push({ text, type });
+            if (gameLog.length > 50) gameLog.shift();
+        }
+
+        // ===============================================
+        // INPUT HANDLING
+        // ===============================================
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            
+            let now = Date.now();
+            if (now - lastMoveTime < MOVE_COOLDOWN) return;
+            
+            if (e.key === 'ArrowUp') {
+                movePlayer(0, -1);
+                lastMoveTime = now;
+            } else if (e.key === 'ArrowDown') {
+                movePlayer(0, 1);
+                lastMoveTime = now;
+            } else if (e.key === 'ArrowLeft') {
+                movePlayer(-1, 0);
+                lastMoveTime = now;
+            } else if (e.key === 'ArrowRight') {
+                movePlayer(1, 0);
+                lastMoveTime = now;
+            } else if (e.key === ' ') {
+                attackEnemies();
+                e.preventDefault();
+            } else if (e.key === 'e' || e.key === 'E') {
+                // Use health potion
+                let potion = player.inventory.find(i => i.type === 'health');
+                if (potion) {
+                    player.health = Math.min(player.maxHealth, player.health + 25);
+                    player.inventory = player.inventory.filter(i => i !== potion);
+                    addLog('Used health potion!', 'loot');
+                }
+            } else if (e.key === 'm' || e.key === 'M') {
+                showMinimap = !showMinimap;
+            } else if (e.key >= '1' && e.key <= '9') {
+                equipWeapon(parseInt(e.key) - 1);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // ===============================================
+        // DUNGEON REGENERATION
+        // ===============================================
+        function regenerateDungeon() {
+            worldSeed = Date.now();
+            setSeed(worldSeed);
+            
+            prufer = seededPrufer(n);
+            
+            computeDepths();
+            computeSubtreeSizes();
+            computeDiameter();
+            computeGridLayout();
+            assignBiomes();
+            
+            // Clear room cache
+            roomCache = {};
+            
+            // Reset player
+            player.x = 12;
+            player.y = 9;
+            player.health = 100;
+            player.coins = 0;
+            player.inventory = [];
+            player.equippedWeapon = null;
+            player.attack = 10;
+            
+            currentRoom.id = 1;
+            currentRoom.visited = new Set([1]);
+            currentRoom.enemies = [];
+            currentRoom.items = [];
+            
+            gameLog = [];
+            showMinimap = true;
+            addLog('🎮 New dungeon generated!', 'info');
+            addLog(`Seed: ${worldSeed}`, 'info');
+            addLog(`Prüfer length: ${prufer.length}`, 'info');
+            addLog(`Diameter: ${diameterValue}`, 'info');
+        }
+
+        // ===============================================
+        // MAIN GAME LOOP
+        // ===============================================
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawRoom();
+            updateEnemies();
+            updateUI();
+            drawMinimap();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ===============================================
+        // INITIALIZATION
+        // ===============================================
+        function init() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            minimapCanvas = document.getElementById('minimapCanvas');
+            minimapCtx = minimapCanvas.getContext('2d');
+            
+            regenerateDungeon();
+            
+            addLog('Welcome to Prüfer Dungeon Crawler!', 'info');
+            addLog('Use arrow keys to move, Space to attack', 'info');
+            
+            gameLoop();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+
