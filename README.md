@@ -1,0 +1,1 @@
+The project aims to see the use of Prufer codes in procedural map generation. In Open world Games we often render a premade map, but games like minecraft employ procedural generation of a terrain. The project researches if Prufer codes can be used as a 1D array that stores the layout of a map?
